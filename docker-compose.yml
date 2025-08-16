@@ -1,0 +1,76 @@
+services:
+  mysql:
+    container_name: some-mysql
+    image: mysql:5.7
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: prestashop
+    networks:
+      - prestashop_network
+  prestashop:
+    container_name: prestashop
+    image: prestashop/prestashop:latest # Latest stable version of the PrestaShop, to see all available images go to ...
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    ports:
+      - 8080:80
+    environment:
+      DB_SERVER: some-mysql
+      DB_NAME: prestashop
+      DB_USER: root
+      DB_PASSWD: admin
+      PHP_INI_MEMORY_LIMIT: 512M
+      PHP_INI_MAX_EXECUTION_TIME: 300
+      PHP_INI_UPLOAD_MAX_FILESIZE: 20M
+      PHP_INI_POST_MAX_SIZE: 22M
+      PS_INSTALL_AUTO: 0
+      PS_ERASE_DB: 0
+      PS_DOMAIN: localhost:8080
+      PS_FOLDER_ADMIN: admin
+      PS_FOLDER_INSTALL: install
+    user: "33:33"
+    volumes:
+      - prestashop_data:/var/www/html
+    networks:
+      - prestashop_network
+  
+  install-cleaner:
+    image: alpine:latest
+    depends_on:
+      - prestashop
+    volumes:
+      - prestashop_data:/var/www/html
+    command: >
+      sh -c "
+        echo 'Waiting for PrestaShop installation to complete...' &&
+        echo 'Monitoring for admin folder rename (installation completion signal)...' &&
+        while true; do
+          if [ -d /var/www/html/install ]; then
+            # Check if admin folder has been renamed (installation complete)
+            if [ ! -d /var/www/html/admin ] && ls /var/www/html/admin* > /dev/null 2>&1; then
+              echo 'Admin folder renamed detected - installation complete!' &&
+              echo 'Removing install folder for security...' &&
+              rm -rf /var/www/html/install &&
+              echo 'Install folder removed successfully!' &&
+              break
+            else
+              echo 'Installation still in progress (admin folder not renamed yet)...'
+            fi
+          else
+            echo 'Install folder not found - may have been removed already or installation not started'
+            break
+          fi
+          sleep 15
+        done &&
+        echo 'Install cleaner finished.'
+      "
+    restart: "no"
+    networks:
+      - prestashop_network
+
+volumes:
+  prestashop_data:
+networks:
+    prestashop_network:
