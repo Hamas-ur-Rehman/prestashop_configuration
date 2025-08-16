@@ -3,7 +3,18 @@ set -e
 
 # Fix permissions again on startup (safety)
 chown -R www-data:www-data /var/www/html
-chmod -R 755 /var/www/html
+chmod -R 775 /var/www/html
+
+# Ensure admin and install folders have proper write permissions
+if [ -d "/var/www/html/admin" ]; then
+    chmod -R 775 /var/www/html/admin
+    chown -R www-data:www-data /var/www/html/admin
+fi
+
+if [ -d "/var/www/html/install" ]; then
+    chmod -R 775 /var/www/html/install
+    chown -R www-data:www-data /var/www/html/install
+fi
 
 ADMIN_PATH="/var/www/html/admin"
 INSTALL_PATH="/var/www/html/install"
