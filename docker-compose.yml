@@ -1,6 +1,6 @@
 services:
   mysql:
-    container_name: some-mysql
+    container_name: mysql
     image: mysql:5.7
     restart: unless-stopped
     environment:
@@ -8,14 +8,50 @@ services:
       MYSQL_DATABASE: prestashop
     networks:
       - prestashop_network
+
+  nginx-proxy:
+    container_name: nginx-proxy
+    image: nginxproxy/nginx-proxy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - nginx_certs:/etc/nginx/certs
+      - nginx_vhost:/etc/nginx/vhost.d
+      - nginx_html:/usr/share/nginx/html
+      - ./nginx/custom.conf:/etc/nginx/conf.d/custom.conf:ro
+    environment:
+      - DEFAULT_HOST=your-domain.com
+    networks:
+      - prestashop_network
+    depends_on:
+      - prestashop
+
+  letsencrypt:
+    container_name: letsencrypt
+    image: nginxproxy/acme-companion:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nginx_certs:/etc/nginx/certs
+      - nginx_vhost:/etc/nginx/vhost.d
+      - nginx_html:/usr/share/nginx/html
+      - acme_data:/etc/acme.sh
+    environment:
+      - DEFAULT_EMAIL=your-email@domain.com
+    depends_on:
+      - nginx-proxy
+
   prestashop:
     container_name: prestashop
     image: prestashop/prestashop:latest # Latest stable version of the PrestaShop, to see all available images go to ...
     restart: unless-stopped
     depends_on:
       - mysql
-    ports:
-      - 8080:80
+    expose:
+      - "80"
     environment:
       DB_SERVER: some-mysql
       DB_NAME: prestashop
@@ -27,9 +63,14 @@ services:
       PHP_INI_POST_MAX_SIZE: 22M
       PS_INSTALL_AUTO: 0
       PS_ERASE_DB: 0
-      PS_DOMAIN: localhost:8080
+      PS_DOMAIN: your-domain.com
       PS_FOLDER_ADMIN: admin
       PS_FOLDER_INSTALL: install
+      # Nginx proxy configuration
+      VIRTUAL_HOST: your-domain.com
+      VIRTUAL_PORT: 80
+      LETSENCRYPT_HOST: your-domain.com
+      LETSENCRYPT_EMAIL: your-email@domain.com
     user: "33:33"
     volumes:
       - prestashop_data:/var/www/html
@@ -72,5 +113,10 @@ services:
 
 volumes:
   prestashop_data:
+  nginx_certs:
+  nginx_vhost:
+  nginx_html:
+  acme_data:
+
 networks:
-    prestashop_network:
+  prestashop_network:
